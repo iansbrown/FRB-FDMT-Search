@@ -84,8 +84,8 @@ for p in xrange(16):
 #filename = '1113366704_y'+str(top)+'-'+str(bottom)+'_x'+str(left)+'-'+str(right) # fill this in
 filepath = os.path.join(os.getcwd(),path,obsid) # fits file containing data with axes y,x,f,t
 with fits.open('%s/%sI.fits'%(filepath,obsid)) as hdulist:
-    sub_image = hdulist[0].data[:,:,:,8:583] # 8:520, 8:583
-N_y, N_x, nf, N_t = np.shape(sub_image) # nf is not power of two
+    sub_image = hdulist[0].data[:,:,:,:] # 8:520, 8:583
+N_t, nf, N_x, N_y   = np.shape(sub_image) # nf is not power of two
 
 # data parameters
 N_f = 128 # padded up to nearest power of two
@@ -104,8 +104,8 @@ DMs = np.arange(N_f)*dt*1000./const # maximum delay is maximum bins
 dDM = DMs[1] - DMs[0] # DM step
 
 # pad frequency axis to power of two with zeros
-image = np.zeros((N_y, N_x, N_f, N_t), dtype='float64')
-image[:,:,:nf,:] = sub_image # fill in nf < N_f bins with data
+image = np.zeros((N_t, N_f, N_x, N_y), dtype='float64')
+image[:,:nf,:,:] = sub_image # fill in nf < N_f bins with data
 sub_image = 0
 
 # main program
@@ -114,7 +114,7 @@ y_lst, x_lst, SNR_lst, DM_lst, t_lst = [], [], [], [], [] # store detections
 
 for i in xrange(N_y):
     for j in xrange(N_x): # loop through positions on sky
-        im = image[i,j,:,:]
+        im = image[:,:,j,i]
         A = mod_FDMT(im) # take modular FDMT
         for k in xrange(31, np.size(DMs)): # loop through DMs > 300
             SNR, t_max = calculate_SNR(A[k,:]) # calculate SNR
