@@ -10,6 +10,7 @@ plt.ioff()
 from FDMT_functions import FDMT
 from astropy.io import fits
 import os
+import errno
 
 # define functions
 def t_pulse(t_2, f_2, f, DM):
@@ -114,7 +115,8 @@ y_lst, x_lst, SNR_lst, DM_lst, t_lst = [], [], [], [], [] # store detections
 
 for i in xrange(N_y):
     for j in xrange(N_x): # loop through positions on sky
-        im = image[:,:,j,i]
+        imtemp = image[:,:,j,i]
+        im=np.transpose(imtemp,(4,3,2,1))
         A = mod_FDMT(im) # take modular FDMT
         for k in xrange(31, np.size(DMs)): # loop through DMs > 300
             SNR, t_max = calculate_SNR(A[k,:]) # calculate SNR
@@ -125,8 +127,15 @@ for i in xrange(N_y):
                 DM_lst.append(DMs[k])
                 t_lst.append(t_max) # store results
 
-outdir = ('%s'%(filepath)) # fill this in
+outdir = ('%s/FDMT/'%(filepath)) # fill this in
 num = len(y_lst) # number of detections
+#create outdir if does not already exist.
+if not os.path.exists(os.path.dirname(outdir)):
+    try:
+        os.makedirs(os.path.dirname(outdir))
+    except OSError as exc: # Guard against race condition
+        if exc.errno != errno.EEXIST:
+            raise
 
 # save figures
 tm = N_t*dt # for modulus purposes
