@@ -12,6 +12,7 @@ from FDMT_functions import FDMT
 from astropy.io import fits
 import os
 import errno
+import timeit
 
 # define functions
 def t_pulse(t_2, f_2, f, DM):
@@ -74,6 +75,7 @@ def calculate_SNR(row):
 counter = 0 # total number of detections
 path="default"
 obsid="1133102400"
+start = timeit.default_timer()
 '''
 for p in xrange(16):
     print p, dtime.datetime.now()
@@ -114,6 +116,17 @@ sub_image = 0
 # main program
 sigma = 6.5 # S/N detection threshold
 y_lst, x_lst, SNR_lst, DM_lst, t_lst = [], [], [], [], [] # store detections
+tm = N_t*dt # for modulus purposes
+
+outdir = ('%sFDMT/'%(filepath))
+#create outdir if does not already exist.
+if not os.path.exists(os.path.dirname(outdir)):
+    try:
+        os.makedirs(os.path.dirname(outdir))
+    except OSError as exc: # Guard against race condition
+        if exc.errno != errno.EEXIST:
+            raise
+
 
 for i in xrange(N_y):
     for j in xrange(N_x): # loop through positions on sky
@@ -129,8 +142,43 @@ for i in xrange(N_y):
                 SNR_lst.append(SNR)
                 DM_lst.append(DMs[k])
                 t_lst.append(t_max) # store results
+                counter+=1
+                plt.figure(figsize=(18,8))
+                plt.imshow(im, origin='lower', cmap='Greys_r', interpolation='nearest', \
+                       extent=(t[0], t[-1]+dt, f_min-df/2., \
+                               f_max+df/2.), aspect='auto')
+                t_pmax = t_pulse(t_max, f_min, f, DMs[k]) # superimpose
+                plt.plot((t_pmax + 5.*dt) % tm, f, 'r') # dispersion curve, shifted 5 bins to 
+                # the right to not block data in case it is hard to see, also modded
+                if t_max < N_f*dt: # need to show whole image to see modded part
+                    plt.xlim(0., tm)
+                else:
+                    plt.xlim(max(t_max-65.,0.), min(t_max+50.,tm)) # zoom in around pulse
+                plt.ylim(f_min-df/2., f_max+df/2.) # set limits or there will be white 
+                # space
+                plt.colorbar()
+                plt.xlabel('Time (s)', size=16)
+                plt.ylabel('Frequency (MHz)', size=16)
+                plt.title('%s,%s  S/N=%.2f'%((y_lst[i]),(x_lst[i]),SNR_lst[i]), size=18)
+                plt.savefig(outdir+'event'+str(counter)+'_curve.png')
+                plt.close()
+            
+                #A = mod_FDMT(im)
+                plt.figure(figsize=(18,8))
+                plt.imshow(A, origin='lower', cmap='hot', interpolation='nearest', \
+                       extent=(t[0], t[-1]+dt, DMs[0]-dDM/2., DMs[-1]+dDM/2.), \
+                       aspect='auto')
+                plt.plot(t_max+0.5*dt, DMs[k], 'c*', markersize=8.)
+                plt.xlim(max(t_max-65.,0.), min(t_max+50.,tm))
+                plt.ylim(DMs[0]-dDM/2., DMs[-1]+dDM/2.)
+                plt.colorbar()
+                plt.xlabel('Time (s)', size=16)
+                plt.ylabel('Dispersion Measure (pc cm^-3)', size=16)
+                plt.title('%s,%s  S/N=%.2f'%(i,j,SNR, size=18)
+                plt.savefig(outdir+'event'+str(counter)+'_FDMT.png')
+                plt.close()
 
-outdir = ('%sFDMT/'%(filepath)) # fill this in
+'''outdir = ('%s/FDMT/'%(filepath)) # fill this in
 num = len(y_lst) # number of detections
 #create outdir if does not already exist.
 if not os.path.exists(os.path.dirname(outdir)):
@@ -182,5 +230,6 @@ for i in xrange(num):
 
 counter += num
 image = 0
-
+'''
 print (counter)
+print("total time for FDMT:%f")%(timeit.default_timer()-start)
