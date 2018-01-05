@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 ## Written by Bruce Wu
 
 # import packages
@@ -23,7 +24,7 @@ def t_pulse(t_2, f_2, f, DM):
     """
     return t_2 + 4.148808*DM*((f/1000.)**(-2) - (f_2/1000.)**(-2))/1000.
 
-def mod_FDMT(im):
+def mod_FDMT(im,f_min,f_max,df):
     """
     Modular FDMT. Dispersion curves which leave the left boundary of the
     image come back through the right boundary. Achieved by duplicating
@@ -72,7 +73,7 @@ def calculate_SNR(row):
 #pos = [0, 256, 512, 768, 1024]
 counter = 0 # total number of detections
 path="default"
-obsid="1165925976"
+obsid="1133102400"
 '''
 for p in xrange(16):
     print p, dtime.datetime.now()
@@ -83,22 +84,23 @@ for p in xrange(16):
     '''
 # load data
 #filename = '1113366704_y'+str(top)+'-'+str(bottom)+'_x'+str(left)+'-'+str(right) # fill this in
-filepath = os.path.join(os.getcwd(),path,obsid) # fits file containing data with axes y,x,f,t
+filepath = os.getcwd()#os.path.join(os.getcwd(),path,obsid) # fits file containing data with axes y,x,f,t
 with fits.open('%s/%sI.fits'%(filepath,obsid)) as hdulist:
     sub_image = hdulist[0].data[:,:,:,:] # 8:520, 8:583
 N_t, nf, N_x, N_y   = np.shape(sub_image) # nf is not power of two
-
+print (N_t,nf,N_x,N_y)
 # data parameters
-N_f = 128 # padded up to nearest power of two
-f_min = 169.755 # MHz
-f_max = 210.395
-dt = 0.5 # s
-df = 0.32 # MHz
+N_f = 512 # padded up to nearest power of two
+f_min = 138.594 # MHz
+f_max = 168.954
+dt = 16 # s
+df = 1.28 # MHz
+print (f_min,f_max)
 t = np.arange(N_t)*dt
 f = np.arange(N_f)*df + f_min
 const = 4.148808*((f_min/1000.)**(-2) - (f_max/1000.)**(-2)) # for converting 
                                                     # delay to DM
-DMs = np.arange(N_f)*dt*1000./const # maximum delay is maximum bins
+DMs = np.arange(N_t)*dt*1000./const # maximum delay is maximum bins
                          # spanned by pulse as inputed into FDMT
                          # multiplied by the timestep, then turned into
                          # a DM
@@ -116,8 +118,9 @@ y_lst, x_lst, SNR_lst, DM_lst, t_lst = [], [], [], [], [] # store detections
 for i in xrange(N_y):
     for j in xrange(N_x): # loop through positions on sky
         imtemp = image[:,:,j,i]
-        im=np.transpose(imtemp,(4,3,2,1))
-        A = mod_FDMT(im) # take modular FDMT
+        im=np.transpose(imtemp,(1,0))
+        A = FDMT(im, f_min, f_max, N_t, 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
+	print (np.shape(A))
         for k in xrange(31, np.size(DMs)): # loop through DMs > 300
             SNR, t_max = calculate_SNR(A[k,:]) # calculate SNR
             if SNR > sigma: # if SNR is greater than detection threshold
@@ -127,7 +130,7 @@ for i in xrange(N_y):
                 DM_lst.append(DMs[k])
                 t_lst.append(t_max) # store results
 
-outdir = ('%s/FDMT/'%(filepath)) # fill this in
+outdir = ('%sFDMT/'%(filepath)) # fill this in
 num = len(y_lst) # number of detections
 #create outdir if does not already exist.
 if not os.path.exists(os.path.dirname(outdir)):
@@ -141,9 +144,9 @@ if not os.path.exists(os.path.dirname(outdir)):
 tm = N_t*dt # for modulus purposes
 print (num)
 for i in xrange(num):
-    im = image[y_lst[i],x_lst[i],:,:]
+    img = image[:,:,x_lst[i],y_lst[i]]
     plt.figure(figsize=(18,8))
-    plt.imshow(im, origin='lower', cmap='Greys_r', interpolation='nearest', \
+    plt.imshow(img, origin='lower', cmap='Greys_r', interpolation='nearest', \
            extent=(t[0], t[-1]+dt, f_min-df/2., \
                    f_max+df/2.), aspect='auto')
     t_pmax = t_pulse(t_lst[i], f_min, f, DM_lst[i]) # superimpose
@@ -162,7 +165,7 @@ for i in xrange(num):
     plt.savefig(outdir+'event'+str(counter+i)+'_curve.png')
     plt.close()
 
-    A = mod_FDMT(im)
+    #A = mod_FDMT(im)
     plt.figure(figsize=(18,8))
     plt.imshow(A, origin='lower', cmap='hot', interpolation='nearest', \
            extent=(t[0], t[-1]+dt, DMs[0]-dDM/2., DMs[-1]+dDM/2.), \
