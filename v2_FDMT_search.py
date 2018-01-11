@@ -32,7 +32,7 @@ def Test():
     dt=2
     tmax=112
 
-    f=f0+(np.arange(768)*df) 
+    f=f0+(np.arange(384)*df) 
 
     delay=(4.148808*((((f/1000)**-2)-(f.max()/1000)**-2)*DM))/1000
     D=np.zeros((int((tmax/dt)),len(f)))
