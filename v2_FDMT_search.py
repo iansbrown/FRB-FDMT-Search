@@ -95,8 +95,8 @@ print (N_t,nf,N_x,N_y)
 N_f = 512 # padded up to nearest power of two
 f_min = 138.594 # MHz
 f_max = 168.954
-dt = 16 # s
-df = 1.28 # MHz
+dt = 2 # s
+df = .08 # MHz
 print (f_min,f_max)
 t = np.arange(N_t)*dt
 f = np.arange(N_f)*df + f_min
@@ -118,7 +118,7 @@ sigma = 6.5 # S/N detection threshold
 y_lst, x_lst, SNR_lst, DM_lst, t_lst = [], [], [], [], [] # store detections
 tm = N_t*dt # for modulus purposes
 
-outdir = ('%sFDMT/'%(filepath))
+outdir = ('%s/aFDMT/'%(filepath))
 #create outdir if does not already exist.
 if not os.path.exists(os.path.dirname(outdir)):
     try:
@@ -133,7 +133,7 @@ for i in xrange(N_y):
         imtemp = image[:,:,j,i]
         im=np.transpose(imtemp,(1,0))
         A = FDMT(im, f_min, f_max, N_t, 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
-	print (np.shape(A))
+	#print (np.shape(A))
         for k in xrange(31, np.size(DMs)): # loop through DMs > 300
             SNR, t_max = calculate_SNR(A[k,:]) # calculate SNR
             if SNR > sigma: # if SNR is greater than detection threshold
@@ -144,7 +144,7 @@ for i in xrange(N_y):
                 t_lst.append(t_max) # store results
                 counter+=1
                 plt.figure(figsize=(18,8))
-                plt.imshow(im, origin='lower', cmap='Greys_r', interpolation='nearest', \
+                plt.imshow(im[:nf,:], origin='lower', cmap='Greys_r', interpolation='nearest', \
                        extent=(t[0], t[-1]+dt, f_min-df/2., \
                                f_max+df/2.), aspect='auto')
                 t_pmax = t_pulse(t_max, f_min, f, DMs[k]) # superimpose
@@ -159,7 +159,7 @@ for i in xrange(N_y):
                 plt.colorbar()
                 plt.xlabel('Time (s)', size=16)
                 plt.ylabel('Frequency (MHz)', size=16)
-                plt.title('%s,%s  S/N=%.2f'%((y_lst[i]),(x_lst[i]),SNR_lst[i]), size=18)
+                plt.title('%s,%s  S/N=%.2f'%(i,j,SNR), size=18)
                 plt.savefig(outdir+'event'+str(counter)+'_curve.png')
                 plt.close()
             
@@ -174,7 +174,7 @@ for i in xrange(N_y):
                 plt.colorbar()
                 plt.xlabel('Time (s)', size=16)
                 plt.ylabel('Dispersion Measure (pc cm^-3)', size=16)
-                plt.title('%s,%s  S/N=%.2f'%(i,j,SNR, size=18)
+                plt.title('%s,%s  S/N=%.2f'%(i,j,SNR), size=18)
                 plt.savefig(outdir+'event'+str(counter)+'_FDMT.png')
                 plt.close()
 

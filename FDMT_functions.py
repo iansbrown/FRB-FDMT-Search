@@ -115,7 +115,7 @@ def FDMT_iteration(Input, maxDT, F, f_min, f_max, iteration_num, dataType): #, V
             
             i_T_min = 0
             
-            i_T_max = dT_middle_larger
+            i_T_max = dT_middle_larger	
             Output[i_F,i_dT + ShiftOutput,i_T_min:i_T_max] = Input[2*i_F, dT_middle_index,i_T_min:i_T_max]
             
             
