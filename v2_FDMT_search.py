@@ -19,7 +19,7 @@ parser = OptionParser() #create parser for program options
 
 parser.add_option("-o", "--obsid",type='string',action="store", dest="obsid",help='obsid to be used')#obsid for hypercube
 parser.add_option('-p','--path',type='string', action= 'store', dest='path',help='path to creat fits files in', default='FDMT')#path to store FDMT output
-parser.add_option('-t','--test',type='string', action= 'store', dest='test',help='True to generate a test pulse', default=False)#set True to create a test pulse
+parser.add_option('-t','--test',type='string', action= 'store', dest='test',help='True to generate a test pulse', default='False')#set True to create a test pulse
 options, args = parser.parse_args()
 
 # define functions
@@ -106,7 +106,7 @@ counter = 0 # total number of detections
 path=options.path
 obsid=options.obsid
 start = timeit.default_timer()
-
+test=options.test
 '''
 for p in xrange(16):
     print p, dtime.datetime.now()
@@ -119,7 +119,7 @@ for p in xrange(16):
 #filename = '1113366704_y'+str(top)+'-'+str(bottom)+'_x'+str(left)+'-'+str(right) # fill this in
 filepath = os.getcwd()#os.path.join(os.getcwd(),path,obsid) # fits file containing data with axes y,x,f,t
 
-if options.test == True:
+if test == 'True':
     sub_image=Test()
     
 else:    
