@@ -35,8 +35,7 @@ def Test():
     f=f0+(np.arange(768)*df) 
 
     delay=(4.148808*((((f/1000)**-2)-(f.max()/1000)**-2)*DM))/1000
-
-    D=np.zeros(int((tmax/dt)),len(f))
+    D=np.zeros((int((tmax/dt)),len(f)))
     D[np.int32(np.floor((delay/dt))),np.arange(len(f))]=1
     nt,nf=np.shape(D)
     D.shape=(nt,nf,1,1)
