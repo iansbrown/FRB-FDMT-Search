@@ -129,9 +129,9 @@ print (N_t,nf,N_x,N_y)
 # data parameters
 N_f = 512 # padded up to nearest power of two
 f_min = 138.594 # MHz
-f_max = 168.954
 dt = 2 # s
 df = .08 # MHz
+f_max = f_min + df*N_f
 print (f_min,f_max)
 t = np.arange(N_t)*dt
 f = np.arange(N_f)*df + f_min
