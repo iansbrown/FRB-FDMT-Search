@@ -26,24 +26,37 @@ options, args = parser.parse_args()
 def Test():
     '''generate a single pixel pulse to feed into FDMT for test purposes
     '''
-    DM=500
+    DM=550
     df=.08
     f0=138.594
-    dt=2
+    dt=2.0
     tmax=112
 
     f=f0+(np.arange(384)*df) 
 
     delay=(4.148808*((((f/1000)**-2)-(f.max()/1000)**-2)*DM))/1000
     D=np.zeros((int((tmax/dt)),len(f)))
-    D[np.int32(np.floor((delay/dt))),np.arange(len(f))]=1
+    #for i in range(len(f)):
+   	# D[:,i]=np.random.normal(0,0.1,224)	
+    D[np.int32((np.floor((delay/dt))+10)),np.arange(len(f))]+=1
     nt,nf=np.shape(D)
     D.shape=(nt,nf,1,1)
     #plt.clf()
     #plt.imshow(D.T,origin='lower',aspect=1,vmin=0,vmax=1,extent=(0,tmax,f.min(),f.max()))
     return D
     
-    
+
+def Control_pulse(D,fbins,df=.08,f0=138.594,dt=2.0):
+    '''generate a pulse and places it into a single spacial pixel in image to ensure non-detection is not a failure of program
+    '''
+    DM=550
+    f=f0+(np.arange(fbins)*df)
+    delay=(4.148808*((((f/1000)**-2)-(f.max()/1000)**-2)*DM))/1000
+    D[np.arange(len(f)),np.int32((np.floor((delay/dt))))]+=3
+    #plt.clf()
+    #plt.imshow(D.T,origin='lower',aspect=1,vmin=0,vmax=1,extent=(0,tmax,f.min(),f.max()))
+    return D    
+
 def t_pulse(t_2, f_2, f, DM):
     """
     Function for generating the time values of a burst given the frequency
@@ -70,10 +83,17 @@ def mod_FDMT(im,f_min,f_max,df):
     A = FDMT(mod_im, f_min-df/2., f_max+df/2., N_f, 'float64')
     return np.delete(A, np.arange(N_f), axis=1)
 
-def calculate_SNR(row):
+def calculate_SNR(row,tbins):
     """
     Calculates the peak SNR for a time series de-dispersed at one DM. The
     parameters may need tweaking.
+    """
+    	
+    ind = np.argmax(row)
+    box1=row[0:(ind-1)]
+    box2=row[(ind+1):tbins]
+    noise = np.concatenate((box1, box2))
+    rms = np.sqrt(np.mean(noise**2)) # calculate rms	
     """
     ind = np.argmax(row) # time index of highest value
     room = ind-66
@@ -97,8 +117,8 @@ def calculate_SNR(row):
         	box3 = row[left3:right3] # wraps around
         	noise = np.concatenate((box3, box1, box2))
     rms = np.sqrt(np.mean(noise**2)) # calculate rms
-    return row[ind]/rms, t[ind] # SNR = peak 
-            # over rms. Also return when the peak occurs
+    """
+    return row[ind]/rms, t[ind] # SNR = peak # over rms. Also return when the peak occurs
 
 #pos = [0, 256, 512, 768, 1024]
 counter = 0 # total number of detections
@@ -120,16 +140,19 @@ filepath = os.getcwd()#os.path.join(os.getcwd(),path,obsid) # fits file containi
 
 if test == 'True':
     sub_image=Test()
-    
 else:    
     with fits.open('%s/%sI.fits'%(filepath,obsid)) as hdulist:
         sub_image = hdulist[0].data[:,:,:,:] # 8:520, 8:583
+	print("time to load file:%f")%(timeit.default_timer()-start)
 N_t, nf, N_x, N_y   = np.shape(sub_image) # nf is not power of two
 print (N_t,nf,N_x,N_y)
 # data parameters
-N_f = 512 # padded up to nearest power of two
+n=6
+while 2**n<nf:
+	n+=1
+N_f = 2**n # padded up to nearest power of two
 f_min = 138.594 # MHz
-dt = 2 # s
+dt =2  # s
 df = .08 # MHz
 f_max = f_min + df*N_f
 print (f_min,f_max)
@@ -143,17 +166,8 @@ DMs = np.arange(N_t)*dt*1000./const # maximum delay is maximum bins
                          # a DM
 dDM = DMs[1] - DMs[0] # DM step
 
-# pad frequency axis to power of two with zeros
-image = np.zeros((N_t, N_f, N_x, N_y), dtype='float64')
-image[:,:nf,:,:] = sub_image # fill in nf < N_f bins with data
-sub_image = 0
 
-# main program
-sigma = 6.5 # S/N detection threshold
-y_lst, x_lst, SNR_lst, DM_lst, t_lst = [], [], [], [], [] # store detections
-tm = N_t*dt # for modulus purposes
-
-outdir = os.path.join(filepath,path)#('%s/aFDMT/'%(filepath))
+outdir = ('%s/%s/'%(filepath,path))
 #create outdir if does not already exist.
 if not os.path.exists(os.path.dirname(outdir)):
     try:
@@ -162,16 +176,138 @@ if not os.path.exists(os.path.dirname(outdir)):
         if exc.errno != errno.EEXIST:
             raise
 
+#test dividing by mean without padded axis
+sim=sub_image[:,:,0,0]
+simg=np.transpose(sim,(1,0))
+#simg = Control_pulse(simg,nf,df,f_min,dt)
+plt.figure(figsize=(18,8))
+plt.imshow(simg[:nf,:], origin='lower', cmap='Greys_r', interpolation='nearest', \
+                       extent=(t[0], t[-1]+dt, f_min, \
+                               f_min+df*nf), aspect='auto')
+plt.colorbar()
+plt.xlabel('Time (s)', size=28)
+plt.ylabel('Frequency (MHz)', size=28)
+plt.title('Test Pulse (No Noise)', size=28)
+plt.savefig(outdir+'test550_curve.png')
+plt.close()
+
+im=np.pad(simg,((0,(512-nf)),(0,0)),'constant',constant_values=(0,0))
+A = FDMT(im, f_min, f_max, (N_t), 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
+a,b=np.where(A==np.max(A))
+print (a,b) 
+SNR, t_max = calculate_SNR(A[a[0],:],N_t) # calculate SNR
+print (SNR,t_max)
+plt.figure(figsize=(18,8))
+plt.imshow(A, origin='lower', cmap='hot', interpolation='nearest', \
+                      extent=(t[0], t[-1]+dt, DMs[0]-dDM/2., DMs[-1]+dDM/2.), \
+                       aspect='auto')
+#plt.plot(t_max+0.5*dt, DMs[k], 'c*', markersize=8.)
+#plt.xlim(max(t_max-65.,0.), min(t_max+50.,(N_t*dt)))
+#plt.ylim(DMs[0]-dDM/2., DMs[-1]+dDM/2.)
+plt.colorbar()
+plt.xlabel('Time (s)', size=28)
+plt.ylabel('Dispersion Measure (pc cm^-3)', size=28)
+plt.title('Test Pulse Integrated Intensity(DM,time)', size=28)
+plt.savefig(outdir+'test550_FDMT.png')
+plt.close()
+
+'''
+med_pow = np.median(simg,axis=1) #calculate median power for each fine channel 
+#print (med_pow)
+im=simg - (med_pow[:,None]) #divide by median power to remove 
+plt.figure(figsize=(18,8))
+plt.imshow(im[:nf,:], origin='lower', cmap='Greys_r', interpolation='nearest', \
+                       extent=(t[0], t[-1]+dt, f_min, \
+                               f_min+df*nf), aspect='auto')
+plt.colorbar()
+plt.xlabel('Time (s)', size=28)
+plt.ylabel('Frequency (MHz)', size=28)
+plt.title('Pixel(80,231) After Median Power Subtracted', size=28)
+plt.savefig(outdir+'afwithinject550_curve.png')
+plt.close()
+im=np.pad(im,((0,(512-nf)),(0,0)),'constant',constant_values=(0,0))
+A = FDMT(im, f_min, f_max, (N_t), 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
+a,b=np.where(A==np.max(A))
+print (a,b)
+SNR, t_max = calculate_SNR(A[a[0],:],N_t) # calculate SNR
+print (SNR,t_max)
+plt.figure(figsize=(18,8))
+plt.imshow(A, origin='lower', cmap='hot', interpolation='nearest', \
+                      extent=(t[0], t[-1]+dt, DMs[0]-dDM/2., DMs[-1]+dDM/2.), \
+                       aspect='auto')
+#plt.plot(t_max+0.5*dt, DMs[k], 'c*', markersize=8.)
+#plt.xlim(max(t_max-65.,0.), min(t_max+50.,(N_t*dt)))
+#plt.ylim(DMs[0]-dDM/2., DMs[-1]+dDM/2.)
+plt.colorbar()
+plt.xlabel('Time (s)', size=28)
+plt.ylabel('Dispersion Measure (pc cm^-3)', size=28)
+plt.title('Pixel(80,231) Integrated Intensity(DM,time) ', size=28)
+plt.savefig(outdir+'medsubwithinject550_FDMT.png')
+plt.close()
+'''
+# pad frequency axis to power of two with zeros
+z=timeit.default_timer()
+image = np.zeros((N_t, N_f, N_x, N_y), dtype='float64')
+image[:,:nf,:,:] = sub_image # fill in nf < N_f bins with data
+print("total time to pad using npzeros:%f")%(timeit.default_timer()-z)
+sub_image = 0
+
+# main program
+sigma = 6.5  # S/N detection threshold
+y_lst, x_lst, SNR_lst, DM_lst, t_lst = [], [], [], [], [] # store detections
+tm = N_t*dt # for modulus purposes
+'''
+outdir = ('%s/%s/'%(filepath,path))
+#create outdir if does not already exist.
+if not os.path.exists(os.path.dirname(outdir)):
+    try:
+        os.makedirs(os.path.dirname(outdir))
+    except OSError as exc: # Guard against race condition
+        if exc.errno != errno.EEXIST:
+            raise'''
+
 
 for i in xrange(N_y):
     for j in xrange(N_x): # loop through positions on sky
-        imtemp = image[:,:,j,i]
-        im=np.transpose(imtemp,(1,0))
-        A = FDMT(im, f_min, f_max, N_t, 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
-	#print (np.shape(A))
-        for k in xrange(31, np.size(DMs)): # loop through DMs > 300
-            SNR, t_max = calculate_SNR(A[k,:]) # calculate SNR
-            if SNR > sigma: # if SNR is greater than detection threshold
+	#Ptime=timeit.default_timer()
+	imtemp = image[:,:,j,i]
+        img=np.transpose(imtemp,(1,0))
+	if i==316 and j==145:
+		img = Control_pulse(img,nf,df,f_min,dt)
+		plt.figure(figsize=(18,8))
+                plt.imshow(img[:nf,:], origin='lower', cmap='Greys_r', interpolation='nearest', \
+                       extent=(t[0], t[-1]+dt, f_min, \
+                               f_min+df*nf), aspect='auto')
+                plt.colorbar()
+                plt.xlabel('Time (s)', size=16)
+                plt.ylabel('Frequency (MHz)', size=16)
+                plt.title('%s,%s  injected dispersed source'%(i,j), size=18)
+                plt.savefig(outdir+'injected_curve.png')
+                plt.close()
+        med_pow = np.median(img,axis=1) #calculate median power for each fine channel 
+        im=img - (med_pow[:,None]) #divide by median power to remove 
+
+	if i==316 and j==145:
+		plt.figure(figsize=(18,8))
+                plt.imshow(im[:nf,:], origin='lower', cmap='Greys_r', interpolation='nearest', \
+                       extent=(t[0], t[-1]+dt, f_min, \
+                               f_min+df*nf), aspect='auto')
+                plt.colorbar()
+                plt.xlabel('Time (s)', size=16)
+                plt.ylabel('Frequency (MHz)', size=16)
+                plt.title('%s,%s  injected dispersed source'%(i,j), size=18)
+                plt.savefig(outdir+'subtractedmedian.png')
+                plt.close()
+	#print("total time for FDMT pixel prep:%f")%(timeit.default_timer()-Ptime)
+	#Ftime=timeit.default_timer()
+	A = FDMT(im, f_min, f_max, (N_t), 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
+	#print("total time for FDMT:%f")%(timeit.default_timer()-Ftime)
+	#Stime=timeit.default_timer()
+	a,b=np.where(A==np.max(A))
+	for k in a: # loop through DMs where A is at max value
+	    SNR, t_max = calculate_SNR(A[k,:],N_t) # calculate SNR
+            #print (SNR)
+	    if SNR > sigma: # if SNR is greater than detection threshold
                 y_lst.append(i)
                 x_lst.append(j)
                 SNR_lst.append(SNR)
@@ -192,9 +328,9 @@ for i in xrange(N_y):
                 plt.ylim(f_min-df/2., f_max+df/2.) # set limits or there will be white 
                 # space
                 plt.colorbar()
-                plt.xlabel('Time (s)', size=16)
-                plt.ylabel('Frequency (MHz)', size=16)
-                plt.title('%s,%s  S/N=%.2f'%(i,j,SNR), size=18)
+                plt.xlabel('Time (s)', size=28)
+                plt.ylabel('Frequency (MHz)', size=28)
+                plt.title('Pixel(%s,%s)  S/N=%.2f DM=%.2f'%(i,j,SNR,DMs[k]), size=28)
                 plt.savefig(outdir+'event'+str(counter)+'_curve.png')
                 plt.close()
             
@@ -207,19 +343,20 @@ for i in xrange(N_y):
                 plt.xlim(max(t_max-65.,0.), min(t_max+50.,tm))
                 plt.ylim(DMs[0]-dDM/2., DMs[-1]+dDM/2.)
                 plt.colorbar()
-                plt.xlabel('Time (s)', size=16)
-                plt.ylabel('Dispersion Measure (pc cm^-3)', size=16)
-                plt.title('%s,%s  S/N=%.2f'%(i,j,SNR), size=18)
+                plt.xlabel('Time (s)', size=28)
+                plt.ylabel('Dispersion Measure (pc cm^-3)', size=28)
+                plt.title('Pixel (%s,%s)  S/N=%.2f  DM=%.2f'%(i,j,SNR,DMs[k]), size=28)
                 plt.savefig(outdir+'event'+str(counter)+'_FDMT.png')
                 plt.close()
-
-file1 = open(outdir+'events.txt','w')
+	#print("total time for SNR step:%f")%(timeit.default_timer()-Stime)
+	
+file1 = open(outdir+'/events.txt','w')
 for l in xrange(len(y_lst)):
-    q=('%s,%s,%s,%s,%s\n'% (SNR_lst[l],DM_lst[l],t_lst[l],y_lst[l],x_lst[l]))
+    q=('%s,%s,%s,%s,%s,%s\n'% ((l+1),SNR_lst[l],DM_lst[l],t_lst[l],y_lst[l],x_lst[l]))
     file1.write(q) 
 file1.flush()
 file1.close() 
     
     
 print (counter)
-print("total time for FDMT:%f")%(timeit.default_timer()-start)
+print("total time for program:%f")%(timeit.default_timer()-start)
