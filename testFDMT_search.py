@@ -203,24 +203,18 @@ intensity=np.linspace (0,384,10)
 
 for i in disp:
     for TI in intensity:
-        for j in xrange(x): # loop through positions on sky
-        	#Ptime=timeit.default_timer()
+        for j in xrange(x):
+            
             imtemp = image[:,:,x[j],y[j]]
             img=np.transpose(imtemp,(1,0))
             img = Control_pulse(img,nf,df,f_min,dt,i,TI)
             med_pow = np.median(img,axis=1) #calculate median power for each fine channel 
             im=img - (med_pow[:,None]) #subtract median power to remove constant signals
-        
-        	
-        	#print("total time for FDMT pixel prep:%f")%(timeit.default_timer()-Ptime)
-        	#Ftime=timeit.default_timer()
-            	A = FDMT(im, f_min, f_max, (N_t), 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
-        	#print("total time for FDMT:%f")%(timeit.default_timer()-Ftime)
-        	#Stime=timeit.default_timer()
-            	a,b=np.where(A==np.max(A))
-        	    for k in a: # loop through DMs where A is at max value
-            	   SNR, t_max, noise = calculate_SNR(A[k,:],N_t) # calculate SNR
-                #SNR > sigma: # if SNR is greater than detection threshold
+            A = FDMT(im, f_min, f_max, (N_t), 'float64')#mod_FDMT(im,f_min,f_max,df) # take modular FDMT
+            a,b=np.where(A==np.max(A))
+            
+            for k in a:# loop through DMs where A is at max value
+                SNR, t_max, noise = calculate_SNR(A[k,:],N_t) # calculate SNR
                 y_lst.append(i)
                 x_lst.append(j)
                 SNR_lst.append(SNR)
@@ -228,7 +222,7 @@ for i in disp:
                 t_lst.append(t_max) # store results
                 n_lst.append(noise)
                 DM_lst.append(i)
-                TI_lsd.append(TI)
+                TI_lst.append(TI)
                 counter+=1
                 plt.figure(figsize=(18,8))
                 plt.imshow(im[:nf,:], origin='lower', cmap='Greys_r', interpolation='nearest', \
@@ -268,7 +262,7 @@ for i in disp:
 	
 file1 = open(outdir+'/testevents.txt','w')
 for l in xrange(len(y_lst)):
-    q=('%s,%s,%s,%s,%s,%s,%s\n'% ((l+1),SNR_lst[l],n_list[l],DM_lst[l],t_lst[l],y_lst[l],x_lst[l]))
+    q=('%s,%s,%s,%s,%s,%s,%s,%s,%s\n'% ((l+1),SNR_lst[l],n_lst[l],DM_lst[l],t_lst[l],y_lst[l],x_lst[l],DM_lst[l],TI_lst[l]))
     file1.write(q) 
 file1.flush()
 file1.close() 
